@@ -7,9 +7,11 @@ if (!process.env.NODE_ENV) {
 
 var opn = require('opn')
 var path = require('path')
-var express = require('express')
+// var express = require('express')
+var Koa = require('koa')
 var webpack = require('webpack')
-var proxyMiddleware = require('http-proxy-middleware')
+// var proxyMiddleware = require('http-proxy-middleware')
+var proxyMiddleware = require('koa-proxies')
 var webpackConfig = {{#if_or unit e2e}}process.env.NODE_ENV === 'testing'
   ? require('./webpack.prod.conf')
   : {{/if_or}}require('./webpack.dev.conf')
@@ -22,17 +24,30 @@ var autoOpenBrowser = !!config.dev.autoOpenBrowser
 // https://github.com/chimurai/http-proxy-middleware
 var proxyTable = config.dev.proxyTable
 
-var app = express()
+// var app = express()
+var app = new Koa()
 var compiler = webpack(webpackConfig)
 
-var devMiddleware = require('webpack-dev-middleware')(compiler, {
+/*var devMiddleware = require('webpack-dev-middleware')(compiler, {
   publicPath: webpackConfig.output.publicPath,
   quiet: true
 })
 
 var hotMiddleware = require('webpack-hot-middleware')(compiler, {
   log: false
+})*/
+var webpackDevHotMiddleware = require('koa-webpack-middleware')
+
+var devMiddleware = webpackDevHotMiddleware.devMiddleware(compiler, {
+  publicPath: webpackConfig.output.publicPath,
+  quiet: true
 })
+
+var hotMiddleware = webpackDevHotMiddleware.hotMiddleware(compiler, {
+  log: false
+})
+
+
 // force page reload when html-webpack-plugin template changes
 compiler.plugin('compilation', function (compilation) {
   compilation.plugin('html-webpack-plugin-after-emit', function (data, cb) {
@@ -51,7 +66,7 @@ Object.keys(proxyTable).forEach(function (context) {
 })
 
 // handle fallback for HTML5 history API
-app.use(require('connect-history-api-fallback')())
+app.use(require('koa2-connect-history-api-fallback')())
 
 // serve webpack bundle output
 app.use(devMiddleware)
@@ -62,7 +77,15 @@ app.use(hotMiddleware)
 
 // serve pure static assets
 var staticPath = path.posix.join(config.dev.assetsPublicPath, config.dev.assetsSubDirectory)
-app.use(staticPath, express.static('./static'))
+// app.use(staticPath, express.static('./static'))
+app.use((ctx, next) => {
+  var url = ctx.url.split("\/")
+  if (url[1] === "static") {
+    url.splice(1, 1);
+    ctx.url = url.join("\/")
+  }
+  next()
+}, require('koa-static')(staticPath))
 
 var uri = 'http://localhost:' + port
 
