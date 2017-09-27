@@ -7,6 +7,7 @@ if (!process.env.NODE_ENV) {
 
 var opn = require('opn')
 var path = require('path')
+var fs = require('fs')
 // var express = require('express')
 var Koa = require('koa')
 var webpack = require('webpack')
@@ -77,15 +78,30 @@ app.use(hotMiddleware)
 
 // serve pure static assets
 var staticPath = path.posix.join(config.dev.assetsPublicPath, config.dev.assetsSubDirectory)
+var swPath = path.normalize(__dirname + "/./service-worker-dev.js")
 // app.use(staticPath, express.static('./static'))
-app.use((ctx, next) => {
+staticPath = staticPath.substring(1, staticPath.length)
+app.use(async (ctx, next) => {
   var url = ctx.url.split("\/")
-  if (url[1] === "static") {
+  if (url[1] === staticPath) {
     url.splice(1, 1);
     ctx.url = url.join("\/")
+    await next()
+  } else if (ctx.url === "/service-worker.js") {
+    // await require('koa-send')(ctx, swPath)
+    ctx.body = await new Promise((resolve, reject) => {
+      fs.readFile(swPath, 'utf8', (err, text) => {
+        if (err) reject(err)
+        resolve(text)
+      })
+    })
+    ctx.type = 'application/javascript'
+    ctx.status = 200
+  } else {
+    ctx.status = 400
   }
-  next()
-}, require('koa-static')(staticPath))
+})
+app.use(require('koa-static')(__dirname + "/../static"))
 
 var uri = 'http://localhost:' + port
 
